@@ -14,7 +14,6 @@ WINDOW = 10
 
 app = FastAPI()
 
-# ---------- CORS ----------
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -26,15 +25,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ---------- Rate limit storage ----------
 client_requests = {}
 
 
-# ---------- Request Context Middleware ----------
 @app.middleware("http")
 async def request_context(request: Request, call_next):
     request_id = request.headers.get("X-Request-ID")
-
     if not request_id:
         request_id = str(uuid.uuid4())
 
@@ -42,36 +38,35 @@ async def request_context(request: Request, call_next):
 
     response = await call_next(request)
 
+    # Always echo back the request ID
     response.headers["X-Request-ID"] = request_id
 
     return response
 
 
-# ---------- Rate Limit Middleware ----------
 @app.middleware("http")
 async def rate_limit(request: Request, call_next):
-
     client = request.headers.get("X-Client-Id", "anonymous")
 
     now = time.time()
 
     timestamps = client_requests.get(client, [])
-
     timestamps = [t for t in timestamps if now - t < WINDOW]
 
     if len(timestamps) >= RATE_LIMIT:
-        return JSONResponse(
+        response = JSONResponse(
             status_code=429,
             content={"detail": "Rate limit exceeded"},
         )
+        # Even on rate-limit responses, include X-Request-ID
+        request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        response.headers["X-Request-ID"] = request_id
+        return response
 
     timestamps.append(now)
-
     client_requests[client] = timestamps
 
-    response = await call_next(request)
-
-    return response
+    return await call_next(request)
 
 
 @app.get("/")
