@@ -21,9 +21,9 @@ app.add_middleware(
         EXAM_ORIGIN,
     ],
     allow_credentials=False,
-    allow_methods=["GET", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["X-Request-ID"],
+    expose_headers=["*"],
 )
 
 client_requests = {}
@@ -43,6 +43,7 @@ async def middleware(request: Request, call_next):
     now = time.time()
 
     timestamps = client_requests.get(client_id, [])
+
     timestamps = [t for t in timestamps if now - t < WINDOW]
 
     if len(timestamps) >= RATE_LIMIT:
@@ -66,9 +67,7 @@ async def middleware(request: Request, call_next):
 
 @app.get("/")
 def home():
-    return {
-        "status": "running"
-    }
+    return {"status": "running"}
 
 
 @app.get("/ping")
