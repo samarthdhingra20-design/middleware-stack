@@ -17,8 +17,8 @@ app.add_middleware(
         "https://app-y0dxcr.example.com",
         "https://exam.sanand.workers.dev",
     ],
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_credentials=False,
+    allow_methods=["GET", "OPTIONS"],
     allow_headers=["*"],
     expose_headers=["X-Request-ID"],
 )
@@ -28,14 +28,12 @@ client_requests = {}
 
 @app.middleware("http")
 async def middleware(request: Request, call_next):
-    # ---------- Request ID ----------
     request_id = request.headers.get("X-Request-ID")
     if not request_id:
         request_id = str(uuid.uuid4())
 
     request.state.request_id = request_id
 
-    # ---------- Rate limiting ----------
     client_id = request.headers.get("X-Client-Id", "anonymous")
     now = time.time()
 
@@ -55,7 +53,6 @@ async def middleware(request: Request, call_next):
 
     response = await call_next(request)
 
-    # Echo request ID in every response
     response.headers["X-Request-ID"] = request_id
 
     return response
