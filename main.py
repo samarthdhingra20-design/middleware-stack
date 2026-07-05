@@ -6,6 +6,9 @@ import time
 
 EMAIL = "24f1002646@ds.study.iitm.ac.in"
 
+ALLOWED_ORIGIN = "https://app-y0dxcr.example.com"
+EXAM_ORIGIN = "https://exam.sanand.workers.dev"
+
 RATE_LIMIT = 14
 WINDOW = 10
 
@@ -14,8 +17,8 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://app-y0dxcr.example.com",
-        "https://exam.sanand.workers.dev",
+        ALLOWED_ORIGIN,
+        EXAM_ORIGIN,
     ],
     allow_credentials=False,
     allow_methods=["GET", "OPTIONS"],
@@ -28,13 +31,15 @@ client_requests = {}
 
 @app.middleware("http")
 async def middleware(request: Request, call_next):
-    request_id = request.headers.get("X-Request-ID")
+
+    request_id = request.headers.get("x-request-id")
     if not request_id:
         request_id = str(uuid.uuid4())
 
     request.state.request_id = request_id
 
-    client_id = request.headers.get("X-Client-Id", "anonymous")
+    client_id = request.headers.get("x-client-id", "anonymous")
+
     now = time.time()
 
     timestamps = client_requests.get(client_id, [])
@@ -45,6 +50,7 @@ async def middleware(request: Request, call_next):
             status_code=429,
             content={"detail": "Rate limit exceeded"},
         )
+        response.headers["Retry-After"] = str(WINDOW)
         response.headers["X-Request-ID"] = request_id
         return response
 
@@ -60,7 +66,9 @@ async def middleware(request: Request, call_next):
 
 @app.get("/")
 def home():
-    return {"status": "running"}
+    return {
+        "status": "running"
+    }
 
 
 @app.get("/ping")
