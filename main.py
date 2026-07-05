@@ -7,19 +7,19 @@ import time
 EMAIL = "24f1002646@ds.study.iitm.ac.in"
 
 ALLOWED_ORIGIN = "https://app-y0dxcr.example.com"
-EXAM_ORIGIN = "https://exam.sanand.workers.dev"
 
 RATE_LIMIT = 14
 WINDOW = 10
 
 app = FastAPI()
 
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         ALLOWED_ORIGIN,
-        EXAM_ORIGIN,
     ],
+    allow_origin_regex=r"https://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -29,23 +29,16 @@ client_requests = {}
 
 
 @app.middleware("http")
-async def request_context(request: Request, call_next):
+async def middleware(request: Request, call_next):
+
+    # ---------- Request ID ----------
     request_id = request.headers.get("X-Request-ID")
     if not request_id:
         request_id = str(uuid.uuid4())
 
     request.state.request_id = request_id
 
-    response = await call_next(request)
-
-    # Always echo back the request ID
-    response.headers["X-Request-ID"] = request_id
-
-    return response
-
-
-@app.middleware("http")
-async def rate_limit(request: Request, call_next):
+    # ---------- Rate limiting ----------
     client = request.headers.get("X-Client-Id", "anonymous")
 
     now = time.time()
@@ -58,15 +51,18 @@ async def rate_limit(request: Request, call_next):
             status_code=429,
             content={"detail": "Rate limit exceeded"},
         )
-        # Even on rate-limit responses, include X-Request-ID
-        request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
         response.headers["X-Request-ID"] = request_id
         return response
 
     timestamps.append(now)
     client_requests[client] = timestamps
 
-    return await call_next(request)
+    response = await call_next(request)
+
+    # Echo request id in every response
+    response.headers["X-Request-ID"] = request_id
+
+    return response
 
 
 @app.get("/")
